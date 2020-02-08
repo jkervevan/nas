@@ -1,0 +1,80 @@
+---
+version: "3"
+services:
+
+    ovpn-client:
+        image: dperson/openvpn-client:latest
+        cap_add:
+          - net_admin
+        container_name: ovpn-client
+        volumes:
+          - /dev/net/tun:/dev/net/tun
+          - /opt/vpn:/vpn
+        environment:
+          PUID: 1026
+          PGID: 100
+          TZ: 'Europe/Paris'
+          ROUTE: '192.168.1.0/24'
+          FIREWALL: ''
+          DNS: '8.8.4.4'
+        networks:
+          - default
+        read_only: true
+        tmpfs:
+          - /run
+          - /tmp
+        restart: unless-stopped
+        security_opt:
+          - label:disable
+        stdin_open: true
+        tty: true
+        command: '-r 192.168.1.0/24 -p 8888'
+        ports:
+          - 8888:8888 # port for qbittorrent web UI to be reachable from local network
+
+    reverseproxy:
+        image: reverseproxy
+        ports:
+            - 8080:8080
+        restart: always
+
+    qbittorrent:
+        depends_on:
+          - reverseproxy
+          - ovpn-client
+        image: linuxserver/qbittorrent:latest
+        container_name: qbitorrent
+        environment:
+          - PUID=1026
+          - PGID=65537
+          - TERM=xterm
+          - TZ=Europe/Paris
+          - UMASK_SET=022
+          - WEBUI_PORT=8888
+        network_mode: "service:ovpn-client"
+        volumes:
+          - /volume1/media/anime:/volume1/media/anime
+          - /volume1/media/files/downloads:/volume1/media/files/downloads
+          - /volume1/media/files/tmp.downloads:/volume1/media/files/tmp.downloads
+        restart: always
+
+    sickchill:
+        depends_on:
+            - reverseproxy
+        image: sickchill/sickchill:latest
+        environment:
+          - PUID=1026
+          - PGID=65537
+          - PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          - LANG=C.UTF-8
+          - PYTHONIOENCODING=UTF-8
+          - GPG_KEY=C01E1CAD5EA2C4F0B8E3571504C367C218ADD4FF
+          - PYTHON_VERSION=2.7.16
+          - PYTHON_PIP_VERSION=19.0.3
+        ports:
+          - 7777:8081
+        volumes:
+          - /volume1/media/anime:/volume1/media/anime
+          - /volume1/media/files:/volume1/media/files
+          - /volume1/media/tv shows:/volume1/media/tv shows
+        restart: always
